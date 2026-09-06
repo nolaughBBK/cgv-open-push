@@ -138,11 +138,18 @@ def save_state(state):
 def find_new_schedules(
     state_key,
     schedules,
-    state
+    state,
+    alert_on_first_seen=False,
 ):
     """
-    이전 상태와 비교해서
-    새로 추가된 상영 회차만 반환한다.
+    이전 상태와 현재 상태를 비교해
+    새로 생긴 회차를 찾는다.
+
+    프로그램 최초 초기화 때는
+    기존 회차를 baseline으로만 저장한다.
+
+    정상 운영 이후 새로운 날짜가 처음 등장하면
+    이미 존재하는 회차도 신규 회차로 처리한다.
     """
 
     current_ids = {
@@ -150,21 +157,27 @@ def find_new_schedules(
         for schedule in schedules
     }
 
-    # 해당 극장/날짜를 처음 확인하는 경우
-    # 현재 상태를 기준값으로만 저장
     if state_key not in state:
+
         state[state_key] = sorted(
             current_ids
         )
 
+        if alert_on_first_seen:
+            return schedules
+
         return []
 
     previous_ids = set(
-        state.get(state_key, [])
+        state.get(
+            state_key,
+            []
+        )
     )
 
     new_ids = (
-        current_ids - previous_ids
+        current_ids
+        - previous_ids
     )
 
     new_schedules = [
@@ -201,22 +214,33 @@ def cleanup_state(
     active_keys
 ):
     """
-    현재 감시 범위를 벗어난 오래된 상태를 제거한다.
+    현재 감시 범위에서 벗어난
+    오래된 날짜 상태를 삭제한다.
+
+    __initialized__ 메타 정보는 유지한다.
     """
 
-    old_keys = [
-        key
-        for key in state
-        if key not in active_keys
-    ]
+    for state_key in list(
+        state.keys()
+    ):
 
-    for key in old_keys:
-        del state[key]
+        if state_key == "__initialized__":
+            continue
+
+        if state_key not in active_keys:
+            del state[state_key]
 
 
 def run_monitor():
     client = CGVClient()
     state = load_state()
+
+    state_initialized = bool(
+    state.get(
+        "__initialized__",
+        False
+    )
+)
 
     monitor_dates = get_monitor_dates()
 
@@ -274,12 +298,11 @@ def run_monitor():
                     len(special_schedules)
                 )
 
-                new_schedules = (
-                    find_new_schedules(
-                        state_key=state_key,
-                        schedules=special_schedules,
-                        state=state
-                    )
+                new_schedules = find_new_schedules(
+                    state_key,
+                    special_schedules,
+                    state,
+                    alert_on_first_seen=state_initialized,
                 )
 
                 print(
@@ -313,6 +336,7 @@ def run_monitor():
             time.sleep(
                 REQUEST_DELAY
             )
+    state["__initialized__"] = True
 
     cleanup_state(
         state=state,
