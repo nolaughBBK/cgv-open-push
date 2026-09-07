@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 
 
+
 load_dotenv()
 
 
@@ -25,7 +26,7 @@ DISCORD_ALERT_CHANNEL_ID = int(
 )
 
 # 앞으로 며칠까지 감시할지
-MONITOR_DAYS = 7
+MONITOR_DAYS = 14
 
 
 THEATERS = {
